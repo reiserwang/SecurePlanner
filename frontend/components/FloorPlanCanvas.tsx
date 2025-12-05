@@ -26,25 +26,24 @@ const FloorPlanCanvas: React.FC<FloorPlanCanvasProps> = ({ imageSrc, placements,
   // Access catalog from Backend API
   const deviceCatalog = API.Catalog.getAll;
 
-  // Helper to generate SVG path for a circular sector (wedge)
-  const getWedgePath = (radius: number, startAngleDeg: number, endAngleDeg: number) => {
-    if (endAngleDeg - startAngleDeg >= 360) {
-        return `M 0 0 m -${radius}, 0 a ${radius},${radius} 0 1,0 ${radius * 2},0 a ${radius},${radius} 0 1,0 -${radius * 2},0`;
-    }
+  // Generate a wedge path facing North (Up) centered at (0,0)
+  const getNorthFacingWedge = (radius: number, viewAngleDeg: number) => {
+    // We want the wedge to be symmetrical around the negative Y axis (Up)
+    // Angles in standard math (0 = Right, -90 = Up)
+    // So we want from -90 - viewAngle/2  to  -90 + viewAngle/2
+    
+    const startAngle = -90 - (viewAngleDeg / 2);
+    const endAngle = -90 + (viewAngleDeg / 2);
 
-    // Convert to radians. 
-    // SVG coordinate system adjustment:
-    // 0 deg (North) should be -90 deg in standard Unit Circle.
-    // So we subtract 90 from the input degrees.
-    const startRad = (startAngleDeg - 90) * (Math.PI / 180);
-    const endRad = (endAngleDeg - 90) * (Math.PI / 180);
+    const startRad = startAngle * (Math.PI / 180);
+    const endRad = endAngle * (Math.PI / 180);
 
     const x1 = radius * Math.cos(startRad);
     const y1 = radius * Math.sin(startRad);
     const x2 = radius * Math.cos(endRad);
     const y2 = radius * Math.sin(endRad);
 
-    const largeArcFlag = endAngleDeg - startAngleDeg <= 180 ? "0" : "1";
+    const largeArcFlag = viewAngleDeg > 180 ? 1 : 0;
 
     return `M 0 0 L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
   };
@@ -55,8 +54,7 @@ const FloorPlanCanvas: React.FC<FloorPlanCanvasProps> = ({ imageSrc, placements,
       
       {/* 
          Wrapper: "Shrinks" to fit the image exactly. 
-         This ensures 'absolute' positioning children (0-100%) map 1:1 to image pixels 
-         without letterboxing gaps.
+         This ensures 'absolute' positioning children (0-100%) map 1:1 to image pixels.
       */}
       <div 
         id="floor-plan-capture-area" 
@@ -79,10 +77,18 @@ const FloorPlanCanvas: React.FC<FloorPlanCanvasProps> = ({ imageSrc, placements,
           const viewAngle = device.specs.viewAngle || 360;
           const orientation = placement.orientation || 0;
           
-          // Symbolic radius for the directional indicator
-          const SYMBOLIC_RADIUS = 60; 
+          // Use a larger radius for better visibility
+          const SYMBOLIC_RADIUS = 80; 
           const isDirectional = viewAngle < 360;
           const shouldShowVisuals = (showCoverage || isHovered);
+
+          // Calculate rotation for the icon.
+          // By default, assume icons point UP (0deg).
+          // If the icon points RIGHT (like the wall camera), subtract 90deg.
+          let iconRotation = orientation;
+          if (device.id === 'cam_120_wall') {
+            iconRotation -= 90;
+          }
 
           return (
             <div
@@ -93,14 +99,15 @@ const FloorPlanCanvas: React.FC<FloorPlanCanvasProps> = ({ imageSrc, placements,
               onMouseLeave={() => setHoveredId(null)}
             >
               {/* Directional Indicator (The "Cone") */}
+              {/* We rotate the entire container of the cone to match orientation. */}
               {shouldShowVisuals && isDirectional && (
                   <div 
                       className="absolute top-1/2 left-1/2 pointer-events-none" 
                       style={{ 
                           width: 0, 
                           height: 0, 
-                          overflow: 'visible',
-                          zIndex: -1 
+                          zIndex: -1,
+                          transform: `rotate(${orientation}deg)` // Rotate cone to face direction
                       }}
                   >
                       <svg 
@@ -108,21 +115,20 @@ const FloorPlanCanvas: React.FC<FloorPlanCanvasProps> = ({ imageSrc, placements,
                           height={SYMBOLIC_RADIUS * 2} 
                           viewBox={`-${SYMBOLIC_RADIUS} -${SYMBOLIC_RADIUS} ${SYMBOLIC_RADIUS * 2} ${SYMBOLIC_RADIUS * 2}`}
                           className="overflow-visible"
-                          // Fix: Center the SVG itself relative to the parent div
                           style={{ transform: 'translate(-50%, -50%)' }}
                       >
                            <path 
-                              d={getWedgePath(SYMBOLIC_RADIUS, orientation - viewAngle / 2, orientation + viewAngle / 2)}
+                              d={getNorthFacingWedge(SYMBOLIC_RADIUS, viewAngle)}
                               fill={device.color} 
                               fillOpacity={isHovered ? 0.4 : 0.25}
                               stroke={device.color}
                               strokeWidth={1.5}
                               strokeOpacity={0.8}
                            />
+                           {/* Center Line (Line of Sight) */}
                            <line 
                               x1="0" y1="0" 
-                              x2={SYMBOLIC_RADIUS * Math.cos((orientation - 90) * Math.PI/180)} 
-                              y2={SYMBOLIC_RADIUS * Math.sin((orientation - 90) * Math.PI/180)}
+                              x2="0" y2={-SYMBOLIC_RADIUS}
                               stroke={device.color}
                               strokeWidth="2"
                               strokeDasharray="3 3"
@@ -137,8 +143,8 @@ const FloorPlanCanvas: React.FC<FloorPlanCanvasProps> = ({ imageSrc, placements,
                    <div 
                    className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-dashed opacity-40 pointer-events-none"
                    style={{ 
-                      width: '80px', 
-                      height: '80px',
+                      width: '100px', 
+                      height: '100px',
                       borderColor: device.color,
                       backgroundColor: isHovered ? `${device.color}22` : 'transparent'
                    }}
@@ -146,13 +152,15 @@ const FloorPlanCanvas: React.FC<FloorPlanCanvasProps> = ({ imageSrc, placements,
               )}
 
               {/* Icon Container */}
-              <div className="relative">
+              <div className="relative group">
+                  {/* Icon Wrapper - Handles Rotation */}
                   <div 
-                      className={`relative p-2 rounded-full shadow-md border-2 bg-white transition-transform ${isHovered ? 'scale-110 shadow-xl' : 'scale-100'}`}
+                      className={`relative p-2 rounded-full shadow-md border-2 bg-white transition-all ${isHovered ? 'scale-110 shadow-xl' : 'scale-100'}`}
                       style={{ 
                           borderColor: device.color, 
                           color: device.color,
-                          zIndex: 10
+                          zIndex: 10,
+                          transform: `rotate(${iconRotation}deg)` // Rotate icon to match orientation
                       }}
                   >
                     <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
@@ -160,7 +168,7 @@ const FloorPlanCanvas: React.FC<FloorPlanCanvasProps> = ({ imageSrc, placements,
                     </svg>
                   </div>
 
-                  {/* Tooltip */}
+                  {/* Tooltip (Outside rotation, so text stays upright) */}
                   {isHovered && (
                     <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-3 w-56 bg-slate-900 text-white text-xs rounded-lg py-3 px-4 shadow-xl z-50 pointer-events-none text-left border border-slate-700">
                       <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-slate-900 rotate-45 border-l border-t border-slate-700"></div>
@@ -179,7 +187,7 @@ const FloorPlanCanvas: React.FC<FloorPlanCanvasProps> = ({ imageSrc, placements,
                     </div>
                   )}
 
-                  {/* Remove Button */}
+                  {/* Remove Button (Outside rotation) */}
                   {isHovered && (
                     <button 
                         onClick={(e) => {

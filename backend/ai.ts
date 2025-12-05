@@ -1,6 +1,6 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { DEVICE_CATALOG } from './devices';
-import { PlacementResponse, SecurityStrategy } from '../types';
+import { PlacementResponse, SecurityStrategy, Placement, ChatMessage } from '../types';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 const MODEL_NAME = 'gemini-2.5-flash';
@@ -34,7 +34,7 @@ Rules:
    - "COST_EFFECTIVE": Focus on "choke points" (hallways, entries). Accept some blind spots in low-risk corners.
 `;
 
-const RESPONSE_SCHEMA = {
+const RESPONSE_SCHEMA: Schema = {
   type: Type.OBJECT,
   properties: {
     analysis: {
@@ -53,7 +53,7 @@ const RESPONSE_SCHEMA = {
           orientation: { type: Type.NUMBER, description: "Facing direction in degrees (0=Up, 90=Right, etc). Required for directional devices." },
           reason: { type: Type.STRING, description: "Short reason for this placement." },
         },
-        required: ["id", "deviceId", "x", "y", "reason"],
+        required: ["id", "deviceId", "x", "y", "orientation", "reason"],
       },
     },
   },
@@ -80,7 +80,7 @@ export const analyzeFloorPlan = async (
     
     User Request: ${promptText || "Analyze this floor plan and recommend device placements."}
     
-    Return a JSON object with the analysis and list of placements. Ensure you provide 'orientation' for every device so we know which way it is facing.
+    Return a JSON object with the analysis and list of placements. Ensure you provide 'orientation' for every device.
   `;
 
   try {
@@ -111,8 +111,8 @@ export const analyzeFloorPlan = async (
 
 export const refinePlacements = async (
   imageBase64: string,
-  currentPlacements: any[],
-  chatHistory: any[],
+  currentPlacements: Placement[],
+  chatHistory: ChatMessage[],
   userMessage: string
 ): Promise<PlacementResponse> => {
    const catalogStr = JSON.stringify(DEVICE_CATALOG.map(d => ({
