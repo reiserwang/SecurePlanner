@@ -1,0 +1,5 @@
+{
+  "name": "SecurePlan AI",
+  "description": "Intelligent security system placement recommender using Gemini Vision to analyze floor plans and optimize device layout.",
+  "requestFramePermissions": []
+}
