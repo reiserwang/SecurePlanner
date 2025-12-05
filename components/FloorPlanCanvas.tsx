@@ -23,7 +23,7 @@ const FloorPlanCanvas: React.FC<FloorPlanCanvasProps> = ({ imageSrc, placements,
   }
 
   return (
-    <div className="relative w-full h-full bg-slate-200 overflow-hidden rounded-xl shadow-inner group">
+    <div id="floor-plan-capture-area" className="relative w-full h-full bg-slate-200 overflow-hidden rounded-xl shadow-inner group inline-block">
       <img
         src={imageSrc}
         alt="Floor Plan"

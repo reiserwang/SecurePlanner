@@ -18,6 +18,7 @@ export interface Placement {
   deviceId: string;
   x: number; // percentage 0-100
   y: number; // percentage 0-100
+  orientation?: number; // degrees 0-360, 0=North(Up)
   reason: string;
 }
 
@@ -35,4 +36,14 @@ export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
   isPlacementUpdate?: boolean;
+}
+
+export interface SavedProject {
+  name?: string; // User-friendly name
+  timestamp: string;
+  base64Data: string;
+  placements: Placement[];
+  strategy: SecurityStrategy;
+  chatHistory: ChatMessage[];
+  analysisText: string;
 }
