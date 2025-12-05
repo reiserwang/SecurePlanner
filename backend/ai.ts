@@ -17,7 +17,11 @@ Rules:
 
 2. **Physical Constraints & Orientation**: 
    - Cameras cannot see through walls.
-   - **Orientation**: specificy the direction the device is facing (0-360 degrees). 0=Up(North), 90=Right(East), 180=Down(South), 270=Left(West).
+   - **Orientation**: Specify the direction the device is facing (0-360 degrees). 
+     - **0° = Up (North)**
+     - **90° = Right (East)**
+     - **180° = Down (South)**
+     - **270° = Left (West)**
    - Wall-mounted cameras (120° FOV) must be placed on walls and angled inward to cover the room.
    - Corner placements are optimal for 90-120° FOV sensors/cameras to maximize room coverage.
    - Door sensors go on the frame.

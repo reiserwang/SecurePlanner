@@ -1,20 +1,113 @@
-# SecurePlan AI
+# SecurePlan AI 
 
-## Description
-This web application provides a comprehensive solution for managing security device placement and configuration projects. The application allows users to upload floor plan images, analyze them using AI-powered recommendations, and then save and refine the device placements based on their feedback.
+**SecurePlan AI** is an intelligent security system design tool that leverages Google's **Gemini 2.5 Flash** model to analyze floor plans and automatically recommend optimal placements for security devices (cameras, sensors, detectors).
 
-The core functionality of the application is provided by the following subcomponents:
+It combines computer vision capabilities with structured data generation to provide professional-grade security layouts in seconds, complete with interactive visualizations of fields of view (FOV) and coverage zones.
 
-- *types.ts* : This file defines the central data structures and types used throughout the application, ensuring consistency and enabling seamless communication between different parts of the codebase. It includes interfaces for device specifications, device placements, placement analysis responses, security strategies, chat messages, and saved projects.
-- *backend/devices.ts* : This module defines a catalog of various security devices, including cameras, sensors, and detectors. It provides a centralized repository of device information, which can be used by other parts of the application to display device details, make decisions based on device capabilities, and manage device-related functionality.
-- *backend/ai.ts*: This module is responsible for analyzing floor plan images and generating recommendations for security device placements. It uses the Google GenAI API to process the floor plan, the device catalog, and user input to provide an initial set of device placements, as well as the ability to refine those placements based on user feedback.
-- *backend/library.ts* : This module provides a service for managing the persistence of security project data in the browser's local storage. It allows users to save, load, update, and delete their security project configurations, ensuring that their work is available across multiple sessions.
-- *backend/db.ts* : This module is a low-level interface for interacting with the browser's local storage to save and retrieve the list of saved security projects. It provides a simple API for managing the project data, handling potential errors, and ensuring data integrity.
-- *services/storageService.ts* : This module abstracts the complexities of working with the browser's localStorage API, providing a set of reusable functions for saving, loading, and deleting project data. It ensures that the project data is persisted reliably and efficiently, and handles potential issues like storage quota limitations.
+---
 
-Together, these subcomponents form a comprehensive web application for security project management. Users can upload floor plans, receive AI-generated device placement recommendations, refine the placements based on their feedback, and save their projects for later use. The application leverages the browser's local storage to provide a seamless and persistent user experience, while also maintaining the integrity and security of the project data.
+## Key Features
 
-## Future Works
-1. Improve the architecture for a cleaner separation between the frontend and backend
-2. Enable the frontend architecture to function as a mobile app supporting both iOS and Android platforms
-3. Utilization of large language models (LLMs) while minimizing redundancy and being cost-effective 
+*   **AI Floor Plan Analysis**: Upload any 2D floor plan image. The AI identifies rooms, entry points, and vulnerabilities to suggest device placements.
+*   **Strategic Modes**: Choose between **Highest Security** (maximum coverage) or **Cost Effective** (choke-point focus).
+*   **Interactive Visualization**:
+    *   **Field of View (FOV)**: Visual cones indicating camera direction and coverage angle.
+    *   **Device Orientation**: Icons rotate to match the specific wall or corner mounting angle.
+    *   **Tooltips**: Hover over devices to see specific models and the AI's reasoning for that placement.
+*   **Conversational Refinement**: Use the built-in chat to ask the AI to adjust the plan (e.g., "Remove cameras from the bedroom," "Add a glass break sensor to the living room").
+*   **Project Library**: Save and load projects locally using a browser-based persistent storage system.
+*   **Export**: Download projects as a ZIP file containing the JSON data and a high-resolution screenshot of the annotated plan.
+
+---
+
+## Technical Architecture
+
+The application is built as a **Single Page Application (SPA)** using React and TypeScript, designed with a "Backend-as-a-Module" pattern to simulate a cloud architecture within the browser client.
+
+### 1. The "Backend" Facade (`backend/`)
+To ensure clean separation of concerns, all logic related to AI, Data Persistence, and Business Rules is encapsulated in the `backend/` directory. The Frontend **never** accesses external APIs directly; it goes through the `API` facade exported in `backend/index.ts`.
+
+*   **`backend/ai.ts`**: The core intelligence layer.
+    *   **Model**: Uses `gemini-2.5-flash` for high-speed multimodal reasoning.
+    *   **Structured Output**: Enforces a strict **JSON Schema** to guarantee the LLM returns machine-readable coordinates (`x`, `y`), `orientation` (0-360°), and device IDs.
+    *   **System Instructions**: Contains strict engineering prompts regarding privacy (no cameras in bathrooms) and physical constraints (cameras can't see through walls).
+*   **`backend/library.ts`**: Manages data persistence using the browser's `localStorage` to simulate a database.
+*   **`backend/devices.ts`**: The "Source of Truth" for device metadata (SVG icons, view angles, ranges).
+
+### 2. Frontend Visualization (`frontend/`)
+*   **`FloorPlanCanvas.tsx`**: The core rendering engine.
+    *   **Responsive Mapping**: Maps the AI's percentage-based coordinates (0-100%) to the actual pixel dimensions of the uploaded image.
+    *   **Geometry Calculation**: Dynamically generates SVG paths for camera cones based on the device's `viewAngle` (e.g., 120° vs 360°) and `orientation`.
+    *   **CSS Transformations**: Handles the rotation of device icons and cones to ensure perfect visual alignment with walls.
+
+---
+
+## AI Implementation Details
+
+The core of SecurePlan AI relies on **Multimodal Prompting** with **Schema Enforcement**.
+
+### The Schema
+We do not parse raw text. The Gemini API is configured to return a strict JSON object:
+
+```typescript
+interface PlacementResponse {
+  analysis: string; // Textual explanation of the strategy
+  placements: {
+    id: string;
+    deviceId: string; // Must match catalog ID (e.g., 'cam_120_wall')
+    x: number;        // 0-100%
+    y: number;        // 0-100%
+    orientation: number; // 0=North, 90=East
+    reason: string;
+  }[];
+}
+```
+
+### Contextual Refinement
+When a user asks to change the plan (e.g., "Move the kitchen camera to the corner"), the system sends:
+1.  The original image.
+2.  The *current* JSON state of placements.
+3.  The user's text prompt.
+4.  The Device Catalog (so the AI knows what hardware is available).
+
+This allows the AI to act as a state-machine, receiving the current state and computing the next valid state.
+
+---
+
+## Project Structure
+
+```
+/
+├── backend/               # Centralized logic layer
+│   ├── ai.ts              # Gemini API integration & Prompt Engineering
+│   ├── db.ts              # Low-level local storage wrapper
+│   ├── devices.ts         # Device Catalog definitions
+│   ├── library.ts         # Project Library service
+│   └── index.ts           # Unified API export (Facade)
+│
+├── frontend/              # UI Layer
+│   ├── components/
+│   │   └── FloorPlanCanvas.tsx  # Main visualization component
+│   └── App.tsx            # Main application controller
+│
+├── types.ts               # Shared TypeScript interfaces
+└── index.tsx              # React entry point
+```
+
+---
+
+## Setup & Usage
+
+1.  **API Key**: The application requires a valid Google GenAI API key in the environment (`process.env.API_KEY`).
+2.  **Upload**: Click "Upload Floor Plan" and select a clean 2D image (JPG/PNG).
+3.  **Analyze**: Select a strategy and click "Generate Plan".
+4.  **Refine**: Use the chat box to modify the results naturally.
+5.  **Save**: Save the project to your local library or download it.
+
+---
+
+## Future Roadmap
+
+1.  **3D Projection**: Use the coordinate data to generate a simple 3D mesh of the camera cones.
+2.  **RAG Integration**: Upload PDF manuals for specific devices to answer technical questions in the chat.
+3.  **Cost Estimation**: Calculate total system cost based on the number and type of devices placed.
